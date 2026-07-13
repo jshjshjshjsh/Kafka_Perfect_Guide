@@ -1,10 +1,7 @@
 package com.jsh.kafka;
 
 import com.github.javafaker.Faker;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,6 +109,15 @@ public class PizzaProducer {
         // batch 설정
         //props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "32000");
         //props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "20");
+
+        // 이게 비정상적으로 짧아지면 에러를 터뜨림
+        // Exception in thread "main" org.apache.kafka.common.KafkaException: Failed to construct kafka producer
+        //props.setProperty(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "29000");
+        props.setProperty(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "50000");
+
+        // 만약 전송 시작하고 있는데 kafka가 죽었다고 가정하면 Timeout 에러가 터짐
+        // Exception in thread "main" java.lang.RuntimeException: java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.TimeoutException: Expiring 1 record(s) for pizza-topic-1:50001 ms has passed since batch creation
+
 
         // kafkaProducer 객체 생성
         KafkaProducer<String, String> kafkaProducer = new KafkaProducer<String, String>(props);
