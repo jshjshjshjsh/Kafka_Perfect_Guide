@@ -118,6 +118,14 @@ public class PizzaProducer {
         // 만약 전송 시작하고 있는데 kafka가 죽었다고 가정하면 Timeout 에러가 터짐
         // Exception in thread "main" java.lang.RuntimeException: java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.TimeoutException: Expiring 1 record(s) for pizza-topic-1:50001 ms has passed since batch creation
 
+        // 아래 2개만 하면 idempotence가 적용되지 않음
+        // 그리고 그냥 기동도 잘 됨
+        //props.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
+        //props.setProperty(ProducerConfig.ACKS_CONFIG, "0");
+        // 근데 명시적으로 넣으면 작동 안됨(정상)
+        // 잘못된 config를 넣었기 때문에 idempotence도 동작 안하고 에러를 띄우는 거임
+        props.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+
 
         // kafkaProducer 객체 생성
         KafkaProducer<String, String> kafkaProducer = new KafkaProducer<String, String>(props);
