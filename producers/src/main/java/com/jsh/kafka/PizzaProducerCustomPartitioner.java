@@ -1,7 +1,10 @@
 package com.jsh.kafka;
 
 import com.github.javafaker.Faker;
-import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,9 +14,9 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 
-public class PizzaProducer {
+public class PizzaProducerCustomPartitioner {
 
-    public static final Logger logger = LoggerFactory.getLogger(PizzaProducer.class.getName());
+    public static final Logger logger = LoggerFactory.getLogger(PizzaProducerCustomPartitioner.class.getName());
 
     public static void sendPizzaMessage(KafkaProducer<String, String> kafkaProducer,
                                         String topicName, int iterCount,
@@ -93,7 +96,7 @@ public class PizzaProducer {
 
     public static void main(String[] args) {
 
-        String topicName = "pizza-topic";
+        String topicName = "pizza-topic-partitioner";
 
         // kafkaProducer config 설정
         Properties props = new Properties();
@@ -103,41 +106,25 @@ public class PizzaProducer {
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        // acks 설정
-        //props.setProperty(ProducerConfig.ACKS_CONFIG, "0");
+        props.setProperty("custom.specialKey", "P001");
 
-        // batch 설정
-        //props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "32000");
-        //props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "20");
-
-        // 이게 비정상적으로 짧아지면 에러를 터뜨림
-        // Exception in thread "main" org.apache.kafka.common.KafkaException: Failed to construct kafka producer
-        //props.setProperty(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "29000");
-        props.setProperty(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "50000");
-
-        // 만약 전송 시작하고 있는데 kafka가 죽었다고 가정하면 Timeout 에러가 터짐
-        // Exception in thread "main" java.lang.RuntimeException: java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.TimeoutException: Expiring 1 record(s) for pizza-topic-1:50001 ms has passed since batch creation
-
-        // 아래 2개만 하면 idempotence가 적용되지 않음
-        // 그리고 그냥 기동도 잘 됨
-        //props.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
-        //props.setProperty(ProducerConfig.ACKS_CONFIG, "0");
-        // 근데 명시적으로 넣으면 작동 안됨(정상)
-        // 잘못된 config를 넣었기 때문에 idempotence도 동작 안하고 에러를 띄우는 거임
-        props.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        //props.setProperty("partitioner.class", "com.jsh.kafka.CustomPartitioner");
+        props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, CustomPartitioner.class.getName());
 
 
         // kafkaProducer 객체 생성
         KafkaProducer<String, String> kafkaProducer = new KafkaProducer<String, String>(props);
 
         sendPizzaMessage(kafkaProducer, topicName,
-                -1, 10, 100, 100, false);
+                -1, 100, 0, 0, true);
 
         kafkaProducer.close();
 
 
         /**
-         *  min@min-VirtualBox:~$ kafka-topics --bootstrap-server localhost:9092 --create --topic pizza-topic --partitions 3
+         *  kafka-topics --bootstrap-server localhost:9092 --create --topic pizza-topic-partitioner --partitions 5
+         *  kafka-dump-log --deep-iteration --files /home/min/data/kafka-logs/pizza-topic-partitioner-0/00000000000000000000.log --print-data-log
+         *  kafka-dump-log --deep-iteration --files /home/min/data/kafka-logs/pizza-topic-partitioner-2/00000000000000000000.log --print-data-log
          * */
     }
 }
