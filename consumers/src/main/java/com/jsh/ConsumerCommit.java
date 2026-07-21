@@ -1,9 +1,7 @@
 package com.jsh;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +23,9 @@ public class ConsumerCommit {
         props.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-03");
-        props.setProperty(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "6000");
+        //props.setProperty(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "6000");
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
 
         KafkaConsumer<String, String> kafkaConsumer = new KafkaConsumer<String, String>(props);
         kafkaConsumer.subscribe(List.of(topicName));
@@ -37,7 +37,7 @@ public class ConsumerCommit {
         // main thread 종료 시 별도의 thread로 kafkaConsumer wakeup() 메소드를 호출하게 함.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             logger.info("main program starts to exit by calling wakeup");
-            //kafkaConsumer.wakeup();
+            kafkaConsumer.wakeup();
 
             try{
                 mainThread.join();
@@ -47,11 +47,49 @@ public class ConsumerCommit {
 
         }));
 
-        pollAutoCommit(kafkaConsumer);
+        //pollAutoCommit(kafkaConsumer);
+        pollCommitSync(kafkaConsumer);
+        
 
         /**
          *
          * */
+    }
+
+    private static void pollCommitSync(KafkaConsumer<String, String> kafkaConsumer) {
+        int loopCnt = 0;
+
+        try {
+            while (true) {
+                ConsumerRecords<String, String> consumerRecords = kafkaConsumer.poll(Duration.ofMillis(1000));
+                logger.info("###### loopCnt: {} consumerRecords count: {}", loopCnt++, consumerRecords.count());
+
+
+                for (ConsumerRecord<String, String> record : consumerRecords) {
+                    logger.info("record key:{}, partition:{}, record offset:{}, record value:{}",
+                            record.key(), record.partition(), record.offset(), record.value());
+                }
+
+                try {
+                    if (consumerRecords.count() > 0) {
+                        kafkaConsumer.commitSync();
+                        logger.info("commit sync has been called");
+                    }
+
+                } catch (CommitFailedException e) {
+                    logger.error(e.getMessage());
+                }
+
+
+            }
+        } catch (WakeupException e) {
+            logger.error("wakeup exception has been called");
+        } catch (Exception e) {
+            logger.error(e.getMessage());
+        } finally{
+            logger.info("finally consumer is closing");
+            kafkaConsumer.close();
+        }
     }
 
     public static void pollAutoCommit(KafkaConsumer<String, String> kafkaConsumer) {
