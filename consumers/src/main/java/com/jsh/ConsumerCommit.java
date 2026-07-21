@@ -1,6 +1,7 @@
 package com.jsh;
 
 import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
@@ -8,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 public class ConsumerCommit {
@@ -48,12 +50,54 @@ public class ConsumerCommit {
         }));
 
         //pollAutoCommit(kafkaConsumer);
-        pollCommitSync(kafkaConsumer);
+        //pollCommitSync(kafkaConsumer);
+        pollCommitAsync(kafkaConsumer);
         
 
         /**
          *
          * */
+    }
+
+    private static void pollCommitAsync(KafkaConsumer<String, String> kafkaConsumer) {
+        int loopCnt = 0;
+
+        try {
+            while (true) {
+                ConsumerRecords<String, String> consumerRecords = kafkaConsumer.poll(Duration.ofMillis(1000));
+                logger.info("###### loopCnt: {} consumerRecords count: {}", loopCnt++, consumerRecords.count());
+
+
+                for (ConsumerRecord<String, String> record : consumerRecords) {
+                    logger.info("record key:{}, partition:{}, record offset:{}, record value:{}",
+                            record.key(), record.partition(), record.offset(), record.value());
+                }
+
+                // 성능적으로 비동기가 당연히 유리함
+                kafkaConsumer.commitAsync(new OffsetCommitCallback() {
+                    @Override
+                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                        if (exception != null) {
+                            logger.error("offsets {} is not completed, error:{}", offsets, exception);
+
+                        }
+                    }
+                });
+
+
+            }
+        } catch (WakeupException e) {
+            logger.error("wakeup exception has been called");
+        } catch (Exception e) {
+            logger.error(e.getMessage());
+        } finally{
+            // 비동기로 sync를 하면 날아가는게 있을 수 있으므로 동기적으로 마지막 commit
+            logger.info("#### commit sync before closing");
+            kafkaConsumer.commitSync();
+            logger.info("finally consumer is closing");
+            kafkaConsumer.close();
+        }
+
     }
 
     private static void pollCommitSync(KafkaConsumer<String, String> kafkaConsumer) {
